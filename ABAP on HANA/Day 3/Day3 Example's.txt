@@ -1,0 +1,176 @@
+*&---------------------------------------------------------------------*
+*& Report znvid_new_abap_syntax
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT znvid_new_abap_syntax.
+
+select buyer_guid, sum( gross_amount ) as gross_amount from snwd_so
+group by buyer_guid
+having sum( gross_amount ) > 2000000
+into table @data(itab).
+
+loop at itab into data(wa).
+write: / wa-buyer_guid, wa-gross_amount.
+endloop.
+
+*select so_id, ceil( gross_amount ) as gross_amount,
+*       concat( cast( gross_amount as CHAR ), currency_code ) as final_amt,
+*       case
+*        when gross_amount > 25000 then 'High'
+*        when gross_amount > 10000 and gross_amount <= 25000 then 'Medium'
+*        else 'Low' end as order_kind
+* from snwd_so into table @data(itab).
+*
+*select order_kind, count( order_kind ) as countr from @itab as mytab
+*group by order_kind into table @data(ktab).
+*
+*loop at ktab into data(kwa).
+*write: / kwa-order_kind, kwa-countr.
+*endloop.
+*uline.
+*loop at itab into data(wa).
+*write: / wa-so_id, wa-gross_amount, wa-final_amt, wa-order_kind.
+*endloop.
+
+
+
+
+"Simple case expression
+*select bp_id, company_name,
+*       case bp_role
+*       when '01' then 'Customer'
+*       when '02' then 'Supplier'
+*       end as bp_role
+* from snwd_bpa into table @data(itab).
+*
+*loop at itab into data(wa).
+*write: / wa-bp_id, wa-company_name, wa-bp_role.
+*endloop.
+
+
+
+*select 'M/s ' && ' ' && company_name as company_name from snwd_bpa into table @data(itab).
+*
+*loop at itab into data(wa).
+*write: / wa-company_name.
+*endloop.
+
+
+
+*data : lv_country type c length 10 value 'India'.
+*
+**CONCATENATE 'I Love ' '''' lv_country '''' into data(lv_str) RESPECTING BLANKS.
+*data(lv_str) = |I love '{ lv_country }'|.
+*
+*WRITE : / lv_str.
+*
+*data: lo_obj type ref to cl_e2eie_ic_tc_dpc_ext.
+*create object lo_obj.
+*data(lo_new) = new cl_e2eie_ic_tc_dpc_ext(  ).
+
+
+
+
+*types : BEGIN OF ty_cricket,
+*          captain type c LENGTH 32,
+*          team    type c LENGTH 32,
+*          score   type int4,
+*        END OF TY_CRICKET,
+*        BEGIN OF ty_rugby,
+*          scrummaster type c LENGTH 32,
+*          scrum       type c LENGTH 32,
+*          sprints     type int4,
+*          vacinnated  type c LENGTH 1,
+*        END OF ty_rugby,
+*        tt_rugby   TYPE TABLE of ty_rugby with DEFAULT KEY,
+*        tt_cricket TYPE TABLE of ty_cricket with DEFAULT KEY.
+*
+*data: itab type tt_cricket,
+*      rtab type tt_rugby,
+*      wa  type ty_cricket.
+*
+**wa-captain = 'RCB'.
+**wa-team = 'Kohli'.
+**wa-score = 50.
+**append wa to itab.
+**wa-captain = 'RR'.
+**wa-team = 'Dravid'.
+**wa-score = 100.
+**append wa to itab.
+**wa-captain = 'CSK'.
+**wa-team = 'Dhoni'.
+**wa-score = 120.
+**append wa to itab.
+*
+*itab = value #( ( captain = 'dhoni' team = 'CSK' score = 120 )
+*                ( captain = 'dravid' team = 'RR' score = 100 )
+*                ( captain = 'kohli' team = 'RCB' score = 80 )
+*             ).
+*
+**data(jtab) = value tt_cricket( ( captain = 'CSK' team = 'dhoni' score = 120 )
+**                ( captain = 'RR' team = 'dravid' score = 100 )
+**                ( captain = 'RCB' team = 'kohli' score = 80 ) ).
+*
+*data(jtab) = CORRESPONDING tt_cricket( itab ).
+*
+*rtab = value #( for rwa in itab (
+*                                    scrum = rwa-team
+*                                    scrummaster = rwa-captain
+*                                    sprints = rwa-score
+*                                    vacinnated = cond #( let s = 90 in
+*                                                         when rwa-score > s then 'X'
+*                                                         else ''
+*                                                        )
+*                                ) ).
+*
+*""Table expression
+**data(lv_cap) = value #( itab[ team = 'CSK' ]-captain optional ).
+**write : lv_cap.
+*
+*if line_exists( itab[ team = 'CSK' ] ).
+*    data(linedata) = itab[ team = 'CSK' ].
+*    write : linedata-captain, linedata-score, linedata-team.
+*endif.
+*
+*
+*
+*
+**rtab = CORRESPONDING #( itab MAPPING
+**                                scrum = team
+**                                scrummaster = captain
+**                                sprints = score
+**                      ).
+*
+*loop at itab into wa.
+*write: / wa-captain, wa-team, wa-score.
+*endloop.
+*uline.
+*loop at rtab into data(ra).
+*write: / ra-scrummaster, ra-scrum, ra-sprints, ra-vacinnated.
+*endloop.
+
+
+*types: begin of ty_mara,
+*         matnr type mara-matnr,
+*         matkl type mara-matkl,
+*       end of ty_mara.
+*"3rd line of code
+*data: itab type table of ty_mara,
+*      wa   type          ty_mara.
+
+"10000th line code
+"Just use data(variable) to declare it inline
+"in SELECT queries, we need to also use escaping of host variable
+"with new syntax, you can now specify comma seprated field list
+"Ctrl + 7 to comment the code
+
+*select matnr, matkl UP TO 5 ROWS from mara into table @data(itab).
+*
+*loop at itab into data(wa).
+*    write: / wa-matnr, wa-matkl.
+*endloop.
+*uline.
+*loop at itab ASSIGNING FIELD-SYMBOL(<fs>).
+*    write: / <fs>-matnr, <fs>-matkl.
+*endloop.
