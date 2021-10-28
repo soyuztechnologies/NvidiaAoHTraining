@@ -1,0 +1,268 @@
+1. Simple error handling
+
+alter procedure nvid_emp(in recs integer)
+as begin
+
+declare i integer;
+declare empName varchar(40);
+declare exit handler for sql_error_code 288
+select 'dude you have a table already created' from dummy;
+
+empName := 'Anubhav';
+
+--ddl (ideally we never use DDL in procedures)
+create column table EMP( empid integer, empname varchar(30),
+primary key(empid));
+
+for i in 1..:recs do
+insert into EMP values(:i, :empName || :i);
+end for;
+
+end;
+
+2. Generic Exception handling
+
+alter procedure nvid_emp(in recs integer)
+as begin
+
+declare i integer;
+declare empName varchar(40);
+declare lv_exist varchar(1);
+declare exit handler for sqlexception
+select 'Internal error occurred, contact developer' as msg
+, ::sql_error_code as err_code,
+  ::sql_error_message as err_msg
+ from dummy;
+
+empName := 'Anubhav';
+
+--ddl (ideally we never use DDL in procedures)
+select 'X' into lv_exist from tables where table_name = 'EMP'
+and schema_name = ( select current_schema from dummy );
+
+if( lv_exist <> 'X' ) then
+	create column table EMP( empid integer, empname varchar(30),
+	primary key(empid));
+end if;
+
+for i in 1..:recs do
+insert into EMP values(:i, :empName || :i);
+end for;
+
+end;
+
+3. Simple Array
+
+create procedure nvid_arr(out val varchar(20))
+as begin 
+
+declare arr_num integer array = array(3,1,2);
+declare arr_fruits varchar(20) array = array('Apple','Banana','Cherry');
+
+val := :arr_fruits[:arr_num[2]];
+
+
+end;
+
+4. Cursor in DB
+
+create procedure nvid_simplecusor(
+in category varchar(20),
+out pid varchar(20), out pid2 varchar(20))
+as begin 
+
+--declare 
+declare cursor c1(icat varchar(20))
+ for select product_id from saphanadb.snwd_pd 
+ where category = :icat;
+--open
+open c1(category);
+--fetch
+fetch c1 into pid;
+--fetch
+fetch c1 into pid2;
+--close
+close c1;
+
+end;
+
+call nvid_simplecusor('Mice',?,?)
+
+5. Return a Table out of Procedure mapping by Array
+
+alter procedure nvid_simplecusor(
+in category varchar(20),
+out etab table(prod_id varchar(40), price decimal(10,2))
+)
+as begin 
+
+declare arr_pid varchar(40) array;
+declare arr_price decimal(10,2) array;
+
+--declare 
+declare cursor c1(icat varchar(20))
+ for select product_id, price from saphanadb.snwd_pd 
+ where category = :icat;
+
+--fetch
+for wa as c1(category) do
+	arr_pid[c1::rowcount] = wa.product_id;
+	arr_price[c1::rowcount] = wa.price;	
+end for;
+
+etab = unnest(:arr_pid, :arr_price) as (prod_id, price);
+
+end;
+
+
+6. Working with simple tables
+
+alter procedure nvid_itab(
+in cats varchar(20),
+out etab table(prod_id varchar(40), price decimal(10,2))
+)
+default schema saphanadb
+as begin 
+
+etab = select product_id as prod_id, price from snwd_pd
+where category = cats;
+
+end;
+
+7. Data intensive logic with loop at itab
+
+create procedure nvid_calcprice(
+in tax integer,
+out etab table(prod_id varchar(40), 
+			   price decimal(10,2),
+			   mrp decimal(10,2))
+)
+default schema saphanadb
+as begin 
+
+declare rec_count, i integer;
+declare lv_mrp decimal(10,2);
+
+--this is a implicit table
+lt_prod = select product_id as prod_id, price from snwd_pd;
+
+rec_count = record_count(:lt_prod);
+--loop at itab
+for i in 1..:rec_count do
+--computation
+   lv_mrp := :lt_prod.price[i] * (100 + tax) / 100;
+--append wa to itab2   
+   :etab.insert( (:lt_prod.prod_id[i],
+   				  :lt_prod.price[i],
+   				  :lv_mrp
+   ) ,i);
+end for;
+
+
+end;
+
+8. Scalar Function
+
+create function nvic_area(radius integer)
+returns area decimal(10,2)
+as begin 
+
+area = 3.14 * radius * radius;
+
+end;
+
+select nvic_area(5) from dummy
+
+9. Table function
+
+
+alter function nvic_getSuppliers()
+returns table(bp_id nvarchar(20), company_name varchar(60))
+default schema saphanadb
+as begin 
+
+return select bp_id, company_name from snwd_bpa
+where bp_role = '02';
+
+end;
+
+10. Complete OIA Scenario
+
+create procedure nvic_getoia(
+	out etoia table(bp_id varchar(20),
+					company_name varchar(40),
+					open_days integer,
+					gross_amount decimal(15,2),
+					currency_code varchar(4),
+					tagging nvarchar(1)
+					)
+
+)
+default schema saphanadb
+as begin 
+
+declare lv_client nvarchar(3);
+declare lv_today  date;
+declare lv_max_amount decimal(15,2);
+declare lv_open_days integer;
+declare LV_TARGET_CURR nvarchar(4);
+
+--Step 1: read customizing from zdp_cust
+select current_date into lv_today from dummy;
+
+select mandt, max_open_days, max_amount, currency_code into
+		lv_client, lv_open_days, lv_max_amount, lv_target_curr from zdp_cust
+		where usrid = ( select Ucase(session_context('APPLICATIONUSER' )) from dummy );
+		
+--Step 2: find difference between today-changed
+--seconds_between(d1, d2) / (24 * 60 * 60) == Days 
+--d2 = to_timestamp(localtoutc(now(), 'CET'))
+--d1 = to_timestamp(left(changed_at, 14), 'YYYYMMDDHHMISS')
+--FLOOR(decimal) - Round Off
+lt_days = select floor(seconds_between(to_timestamp(left(changed_at, 14), 'YYYYMMDDHHMISS'),
+							 to_timestamp(localtoutc(now(), 'CET')))) / (24 * 60 * 60) as open_days,
+		   buyer_guid from snwd_so_inv_head where payment_status = '';
+
+--step 3: Join with BPA and get Average	   
+lt_open_days = select company_name, bp_id, avg(open_days) as open_days
+				from :lt_days as t0 inner join snwd_bpa as t1 on 
+				 t0.buyer_guid = t1.node_key group by company_name, bp_id;
+
+--Step 4: Get the total amount in diff currency
+lt_amount = select bpa.bp_id, sum(itm.gross_amount) as gross_amount, itm.currency_code
+				from snwd_so_inv_item as itm inner join snwd_so_inv_head as head
+				on itm.parent_key = head.node_key 
+				inner join snwd_bpa as bpa on
+				head.buyer_guid = bpa.node_key
+				where head.payment_status = ''
+				group by bpa.bp_id, itm.currency_code;
+				
+--Step 5: Currency Conversion
+lt_amount_conv = CE_CONVERSION(:lt_amount, [
+												family = 'currency',
+												method = 'ERP',
+												steps  = 'shift, convert, shift_back',
+												target_unit = :lv_target_curr,
+												client = :lv_client,
+												source_unit_column = 'CURRENCY_CODE',
+												reference_date = :lv_today,
+												output_unit_column = 'CONV_CURR_CODE'
+											] , [gross_amount]);
+											
+--Step 6: Open Days and Amount Data
+lt_gross_amount = select bp_id, sum(gross_amount) as gross_amount,
+							    CONV_CURR_CODE as currency_code from :lt_amount_conv
+							    group by bp_id, conv_curr_code;
+							    
+--Step 7: Tag customers and return data out
+etoia = select odays.bp_id, odays.company_name, odays.open_days, amt.gross_amount as gross_amount,
+			amt.currency_code as currency_code, 
+			case when odays.open_days > :lv_open_days and amt.gross_amount > :lv_max_amount
+				then 'X' 
+				else '' 
+				end	as tagging 
+			from :lt_gross_amount as amt
+			inner join :lt_open_days as odays on 
+			amt.bp_id = odays.bp_id
+			;
+end;
