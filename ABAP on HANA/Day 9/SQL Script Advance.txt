@@ -218,9 +218,12 @@ create type tt_anubhav as table(
 
 18. Using the table type in FM to create output table
 
-
 alter procedure cursorDemo(in cat varchar(40),
-						   out et_data mob5.tt_anubhav
+						   out et_data table(
+						   		product_id varchar(40),
+						   		price decimal(10,2),
+						   		mrp decimal(10,2)
+						   )
 )
 default schema saphanadb
 as begin
@@ -228,6 +231,7 @@ as begin
 declare products varchar(40) array;
 declare price decimal(10,2) array;
 declare lv_mrp decimal(10,2);
+declare lv_price decimal(10,2);
 declare MRP decimal(10,2) array;
 --declare the cursor and assign a query to it
 declare cursor c1(icat varchar(40))
@@ -239,8 +243,8 @@ declare cursor c1(icat varchar(40))
 --Loop at itab into wa
 for wa as c1(:cat) do
 	products[c1::rowcount] = wa.product_id;
-	select round(wa.price, 2) into lv_mrp from dummy;
-	price[c1::rowcount] = :lv_mrp;
+	select round(wa.price, 2) into lv_price from dummy;
+	price[c1::rowcount] = lv_price;
 	select round(wa.price * 118 / 100, 2) into lv_mrp from dummy;
 	mrp[c1::rowcount] := :lv_mrp;
 end for;
@@ -250,6 +254,7 @@ end for;
 et_data = unnest(:products, :price, :mrp) as (product_id, price, mrp);
 
 end;
+
 
 19. Basics of internal table, Implicit declaration, Data-intensive logic
 
